@@ -1,0 +1,386 @@
+// Gets within a desired distance of the boundary
+Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d wpt, Eigen::Vector2d dir, float dx, float e_o) {
+    // Variables
+    float f = 0.0;
+    float df = 0.001;
+    Eigen::Vector2d x = wpt;
+
+    // Determine if the point is inside the polygon or not
+    bool inside = pip(problem.obstacles[idx].verticesCCW(), x);
+
+    if (!inside)
+    {
+        while (true) {
+            // Update reduction factor
+            f = f + df;
+
+            // Determine if the point is out of the polygon 
+            bool in_poly = pip(problem.obstacles[idx].verticesCCW(), x - f * dx*dir);
+
+            if (!in_poly) {
+                break;
+            }
+        }
+
+        return wpt - f*dx*dir - e_o*dir;
+
+    } else {
+        while (true)
+        {
+            // Update expansion factor
+            f = f + df;
+
+            // Determine if the point is now in the polygon 
+            bool in_poly = pip(problem.obstacles[idx].verticesCCW(), x + f * dx*dir);
+
+            if (in_poly) {
+                break;
+            }
+        }
+
+        return wpt + (f - df) * dx * dir - e_o*dir;
+    }
+    
+}
+
+
+
+
+
+/*
+Used to determine the path for moving around the boundary of an object for a left turning robot. 
+*/
+amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, Eigen::Vector2d q, Eigen::Vector2d dir, int idx, std::vector<std::vector<int>> adj, float dx, float e_o) {
+    // Register the hit point and prev point
+    Eigen::Vector2d q_H = q;
+    Eigen::Vector2d q_prev = q;
+
+    // First turn is left
+    Eigen::Vector2d dv(-dir[1], dir[0]); // get direction vector
+    q = q + dx*dv; // get a canidate waypoint
+    q = get_to_boundary(problem, idx, q, dv, 0.001, e_o); // do one correction 
+
+    // Check the connected obs to see if further corrections are needed
+    for (size_t i = 0; i < adj[idx].size(); i++)
+    {
+        // If inside correct
+        if (pip(problem.obstacles[idx].verticesCCW(), q)) {
+            q = get_to_boundary(problem, idx, q, dv, 0.001, e_o);
+        }
+    }
+    
+    // Update the path 
+    path.waypoints.push_back(q);
+
+
+    int safety = 0;
+    while (safety < 4)
+    {
+        // Direction vector 
+        Eigen::Vector2d tv = (q - q_prev) / (q - q_prev).norm(); // get the vector tangent to the surface
+        Eigen::Vector2d dv(tv[1], -tv[0]); // new direction vector
+        
+        if (safety % 2 == 1) {
+            dv = -dv;
+        }
+
+        q_prev = q; // collect the previous q
+        q = q + dx*dv; // get a canidate waypoint
+        q = get_to_boundary(problem, idx, q, dv, 0.001, e_o); // do one correction 
+
+        // Check the connected obs to see if further corrections are needed
+        for (size_t i = 0; i < adj[idx].size(); i++)
+        {
+            // If inside correct
+            if (pip(problem.obstacles[idx].verticesCCW(), q)) {
+                q = get_to_boundary(problem, idx, q, dv, 0.001, e_o);
+            }
+        }
+
+        // Push
+        path.waypoints.push_back(q);
+
+        safety = safety + 1;
+    }
+    
+
+
+
+    return path;
+
+}
+
+
+
+
+
+
+
+
+/* 
+Gets within a desired distance of the boundary. Make sure offset distance sign is correct good
+*/ 
+Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d wpt, Eigen::Vector2d dir, float dx, float e_o) {
+    // Variables
+    Eigen::Vector2d x = wpt;
+
+    // Determine if the point is inside the polygon or not
+    bool inside = pip(problem.obstacles[idx].verticesCCW(), x);   
+    std::cout << inside; 
+
+    if (inside)
+    {
+        // Domain where we can find the boundary
+        std::vector<float> dom = {-dx, 0}; 
+
+        // Determine the boundary location by bisection 
+        int N = ceil((log(dom[1] - dom[0]) - log(0.005)) / log(2)) + 1;
+        float m = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m*dir);
+
+            if (M)
+            {
+                dom = {dom[0], m};
+            } else {
+                dom = {m, dom[1]};
+            }
+            
+        }
+
+        // Return the optimized distance
+        return x + m*dir - e_o*dir;
+
+    } else {
+        // Domain where we can find the boundary
+        std::vector<float> dom = {-dx, dx}; 
+
+        // Perturbed x 
+        Eigen::Vector2d px = x - 0.01*x;
+
+        // Determine the boundary location by bisection for x
+        int N = ceil((log(dom[1] - dom[0]) - log(0.005)) / log(2)) + 1;
+        float m1 = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m1 = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m1*dir);
+
+            if (!M)
+            {
+                dom = {dom[0], m1};
+            } else {
+                dom = {m1, dom[1]};
+            }
+        }
+
+
+        // Determine the boundary location by bisection for px
+        dom = {-dx, dx};
+        float m2 = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m2 = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), px + m2*dir);
+
+            if (!M)
+            {
+                dom = {dom[0], m2};
+            } else {
+                dom = {m2, dom[1]};
+            }
+            
+        }
+
+        // Get a tangent line to the boundary 
+        Eigen::Vector2d x1_b = x + m1*dir;
+        Eigen::Vector2d x2_b = x + m2*dir;
+        Eigen::Vector2d tv = (x1_b - x2_b) / (x1_b - x2_b).norm();
+
+        return x + dx*tv; // - e_o*dir;
+
+        // Return the optimized distance
+        // return x + m1*dir - e_o*dir;
+
+        // return x;
+
+    }
+    
+}
+
+
+
+/*
+Used to determine the path for moving around the boundary of an object for a left turning robot. 
+*/
+amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, Eigen::Vector2d q, Eigen::Vector2d dir, int idx, std::vector<std::vector<int>> adj, float dx, float e_o) {
+    // Register the hit point and prev point
+    Eigen::Vector2d q_H = q;
+    Eigen::Vector2d q_prev = q;
+
+    // First turn is left
+    Eigen::Vector2d dv(-dir[1], dir[0]); // get direction vector
+    q = q + dx*dv; // get a canidate waypoint
+    q = get_to_boundary(problem, idx, q, dv, dx, e_o); // do one correction 
+
+    // Update the path 
+    path.waypoints.push_back(q);
+
+    // Rotation 
+    float theta = -0.2;//-0.1;
+    Eigen::Matrix<double, 2, 2> R; R << cos(theta), -sin(theta), sin(theta), cos(theta);
+
+    // Keep turning into the obstacle 
+    int step = 1;
+    while (step < 6)
+    {
+        // Get the tangent vector 
+        Eigen::Vector2d tv = (q - q_prev) / (q - q_prev).norm();
+        Eigen::Vector2d tv_theta = R * tv;
+        
+        // Collect previous q 
+        q_prev = q;
+
+        // Take a step
+        q = q + dx*tv_theta; // get a canidate waypoint
+        q = get_to_boundary(problem, idx, q, tv_theta, dx, e_o); // do one correction TODO issue is with not on boundary to boundary
+
+        // Update the path 
+        path.waypoints.push_back(q);
+
+        // Update step number
+        step = step + 1;
+    }
+
+
+
+    return path;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* 
+Gets within a desired distance of the boundary. Make sure offset distance sign is correct good
+*/ 
+Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d wpt, Eigen::Vector2d dir, float dx, float e_o) {
+    // Variables
+    Eigen::Vector2d x = wpt;
+
+    // Determine if the point is inside the polygon or not
+    bool inside = pip(problem.obstacles[idx].verticesCCW(), x);   
+    std::cout << inside; 
+
+    if (inside)
+    {
+        // Domain where we can find the boundary
+        std::vector<float> dom = {-dx, 0}; 
+
+        // Determine the boundary location by bisection 
+        int N = ceil((log(dom[1] - dom[0]) - log(0.005)) / log(2)) + 1;
+        float m = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m*dir);
+
+            if (M)
+            {
+                dom = {dom[0], m};
+            } else {
+                dom = {m, dom[1]};
+            }
+            
+        }
+
+        // Return the optimized distance
+        return x + m*dir - e_o*dir;
+
+    } else {
+        // TODO, boundary not being found
+        std::cout << "o";
+        // Domain where we can find the boundary
+        std::vector<float> dom = {-dx, 100*dx}; 
+
+        // Perturbed x 
+        Eigen::Vector2d px = x - 0.001*x;
+
+        // Determine the boundary location by bisection for x
+        int N = ceil((log(dom[1] - dom[0]) - log(0.005)) / log(2)) + 1;
+        float m1 = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m1 = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m1*dir);
+
+            if (!M)
+            {
+                dom = {dom[0], m1};
+            } else {
+                dom = {m1, dom[1]};
+            }
+        }
+
+
+        // Determine the boundary location by bisection for px
+        dom = {-dx, dx};
+        float m2 = (dom[1] + dom[0])/2;
+        for (size_t i = 0; i < N; i++)
+        {
+            // Set the bisection point
+            m2 = (dom[1] + dom[0])/2;
+            bool M = pip(problem.obstacles[idx].verticesCCW(), px + m2*dir);
+
+            if (!M)
+            {
+                dom = {dom[0], m2};
+            } else {
+                dom = {m2, dom[1]};
+            }
+            
+        }
+
+        // Get a tangent line to the boundary 
+        Eigen::Vector2d x1_b = x + m1*dir;
+        Eigen::Vector2d x2_b = px + m2*dir;
+        Eigen::Vector2d tv = (x1_b - x2_b) / (x1_b - x2_b).norm();
+
+        // Get distance from point to offset
+        float d_o = m1 - e_o;
+
+        //return x + dx*tv - d_o*dir;
+
+        return x1_b;
+
+    }
+    
+}
