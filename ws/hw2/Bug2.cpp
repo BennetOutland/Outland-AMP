@@ -8,17 +8,19 @@ Resources:
 - https://libeigen.gitlab.io/eigen/docs-nightly/group__QuickRefPage.html
 - https://en.wikipedia.org/wiki/Line_(geometry)#Linear_equation
 - ChatGPT for the point in polygon implementation
-- Brin "Tea Time Numerical Analysis" 
+- ChatGPT for debugging assistance 
+- ChatGPT for projection distance of a point onto a line
+- Brin "Tea Time Numerical Analysis"
 */
 
 // Includes
-#include "Bug1.h"
+#include "Bug2.h"
 #include <Eigen/Dense>
 #include <Eigen/Core>
 
 
 // Raycasting algorithm to determine if in the obstacle
-obsMemb Bug1::in_obstacle(amp::Problem2D problem, Eigen::Vector2d x) {
+obsMemb Bug2::in_obstacle(amp::Problem2D problem, Eigen::Vector2d x) {
     // Determine if there is an intersection
     //obsMemb obstacleMemebership = obsMemb(true, -1);
     bool valid = true;
@@ -71,7 +73,7 @@ obsMemb Bug1::in_obstacle(amp::Problem2D problem, Eigen::Vector2d x) {
 /*
 A point in Polygon algorithm that returns true if the point is in the polygon
 */
-bool pip(std::vector<Eigen::Vector2d> vertices, Eigen::Vector2d x) {
+bool Bug2::pip(std::vector<Eigen::Vector2d> vertices, Eigen::Vector2d x) {
     // Initialize a count variable
     int count = 0;
 
@@ -100,10 +102,38 @@ bool pip(std::vector<Eigen::Vector2d> vertices, Eigen::Vector2d x) {
 }
 
 
+/*
+Distance a point is from a line segment
+*/
+double pointSegmentDistance(const Eigen::Vector2d& A,
+                            const Eigen::Vector2d& B,
+                            const Eigen::Vector2d& P)
+{
+    Eigen::Vector2d AB = B - A;
+    double ab2 = AB.squaredNorm();
+
+    // Handle degenerate case: A and B are the same point
+    if (ab2 == 0.0) {
+        return (P - A).norm();
+    }
+
+    // Projection parameter t
+    double t = (P - A).dot(AB) / ab2;
+
+    // Clamp to [0, 1]
+    t = std::max(0.0, std::min(1.0, t));
+
+    // Closest point on the segment
+    Eigen::Vector2d C = A + t * AB;
+
+    return (P - C).norm();
+}
+
+
 /* 
 Determines which obstacles are connected in an adjacency list
 */
-std::vector<std::vector<int>> Bug1::connected_obstacles(amp::Problem2D problem, float r_obs) {
+std::vector<std::vector<int>> Bug2::connected_obstacles(amp::Problem2D problem, float r_obs) {
     // Adjacency list
     std::vector<std::vector<int>> adj;
     adj.resize(problem.obstacles.size());
@@ -154,20 +184,95 @@ std::vector<std::vector<int>> Bug1::connected_obstacles(amp::Problem2D problem, 
 }
 
 
+Eigen::Vector2d Bug2::find_a_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d q, Eigen::Vector2d dir, float dx, float e_o) {
+
+    // Defining opt variables 
+    float pi = 3.14;
+    float theta = 0.0; //pi/2; 
+    float theta_prev = 0.0;
+    float dtheta = -0.005; // -0.005
+    int N = ceil(abs((4*pi/2) / dtheta));// ceil(abs((3*pi/2) / dtheta));
+    Eigen::Matrix<double, 2, 2> R, R_safe; R << cos(theta), -sin(theta), sin(theta), cos(theta);
+    Eigen::Vector2d t_dir, t_dir_safe, q_b0, q_b1, n_obs;
+    bool flag = false;
+
+    // Rotate until within e_o of boundary 
+    for (size_t i = 0; i < N; i++)
+    {
+        // Get the vector
+        R << cos(theta), -sin(theta), sin(theta), cos(theta);
+        t_dir = R * dir;
+
+        // Reset flag value 
+        flag = false;
+        idx = 0;
+
+        // See if it runs into any obstacles 
+        for (size_t j = 0; j < problem.obstacles.size(); j++)
+        {
+            flag = pip(problem.obstacles[j].verticesCCW(), q + dx*t_dir + e_o*t_dir);
+            if (flag) {
+                idx = j;
+                break;
+            }
+        }
+
+        if (flag)
+        {
+            // Take the previous safe angle
+            theta_prev = theta_prev - 0.005;
+            R_safe << cos(theta_prev), -sin(theta_prev), sin(theta_prev), cos(theta_prev);
+            t_dir_safe = R_safe * dir;
+
+            // Get the direction normal to the obstacle 
+            n_obs = {-t_dir_safe[1], t_dir_safe[0]};
+
+            // If it is not actually safe due to numerical error, reduce step until it is!
+            if (pip(problem.obstacles[idx].verticesCCW(), q + dx*t_dir_safe + n_obs * e_o)) {
+                while (pip(problem.obstacles[idx].verticesCCW(), q + dx*t_dir_safe + n_obs * e_o)) {
+                    dx = dx - 0.0001;
+                }
+            }
+            dx = dx - 0.0001;
+
+            // Return the now definitey safe point
+            return q + dx*t_dir_safe + n_obs * e_o;
+        } else {
+            // Save as a safe theta value
+            theta_prev = theta;
+            theta = theta + dtheta;
+        }
+        
+    }
+
+    return q;
+    
+}
+
 
 
 /* 
 Gets within a desired distance of the boundary. Make sure offset distance sign is correct good
 */ 
-Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d wpt, Eigen::Vector2d dir, float dx, float e_o) {
+Eigen::Vector2d Bug2::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d wpt, Eigen::Vector2d dir, float dx, float e_o) {
     // Variables
     Eigen::Vector2d x = wpt;
 
-    // Determine if the point is inside the polygon or not
-    bool inside = pip(problem.obstacles[idx].verticesCCW(), x);   
-    //std::cout << inside; 
+    // Determine if the point is inside the polygon or not 
+    bool flag = false;
+    int obs_idx = 0;
 
-    if (inside)
+    // See if it is in into any obstacles 
+    for (size_t j = 0; j < problem.obstacles.size(); j++)
+    {
+        flag = pip(problem.obstacles[j].verticesCCW(), x);
+        if (flag) {
+            obs_idx = j;
+            break;
+        }
+    }
+
+    if (flag)
     {
 
         Eigen::Vector2d t_dir = dir; // dir
@@ -183,7 +288,7 @@ Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Ve
         {
             // Set the bisection point
             m = (dom[1] + dom[0])/2;
-            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m*t_dir);
+            bool M = pip(problem.obstacles[obs_idx].verticesCCW(), x + m*t_dir);
 
             if (M)
             {
@@ -198,59 +303,27 @@ Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Ve
         // Return the optimized distance; 
         return x + m*t_dir - e_o*dir; 
 
-    } 
-    
-}
-
-
-Eigen::Vector2d find_a_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d q, Eigen::Vector2d dir, float dx, float e_o) {
-
-    // Defining opt variables 
-    float pi = 3.14;
-    float theta = pi/2; 
-    float theta_prev = 0.0;
-    float dtheta = -0.01;
-    int N = ceil(abs((3*pi/2) / dtheta));
-    Eigen::Matrix<double, 2, 2> R, R_safe; R << cos(theta), -sin(theta), sin(theta), cos(theta);
-    Eigen::Vector2d t_dir, t_dir_safe, q_b0, q_b1, n_obs;
-
-    // Rotate until within e_o of boundary 
-    for (size_t i = 0; i < N; i++)
-    {
-        // Get the vector
-        R << cos(theta), -sin(theta), sin(theta), cos(theta);
-        t_dir = R * dir;
-
-        // See if it falls into the polygon 
-        if (pip(problem.obstacles[idx].verticesCCW(), q + dx*t_dir + e_o*t_dir)) {
-            // Take the previous safe angle
-            R_safe << cos(theta_prev), -sin(theta_prev), sin(theta_prev), cos(theta_prev);
-            t_dir_safe = R_safe * dir;
-
-            // Get the direction normal to the obstacle 
-            n_obs = {-t_dir_safe[1], t_dir_safe[0]};
-
-            return q + dx*t_dir_safe + n_obs * e_o;
-        } else {
-            // Save as a safe theta value
-            theta_prev = theta;
-            theta = theta + dtheta;
-        }
+    } else {
+        return find_a_boundary(problem, obs_idx, x, dir, dx, e_o);
     }
 
-    return q;
-    
 }
+
+
+
 
 
 /*
 Used to determine the path for moving around the boundary of an object for a left turning robot. 
 */
-amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, Eigen::Vector2d q, Eigen::Vector2d dir, int idx, std::vector<std::vector<int>> adj, float dx, float e_o) {
+amp::Path2D Bug2::move_along_boundary(amp::Path2D path, amp::Problem2D problem, Eigen::Vector2d q, Eigen::Vector2d dir, int idx, std::vector<std::vector<int>> adj, float dx, float e_o) {
     // Register the hit point and prev point
     Eigen::Vector2d q_H = q;
     Eigen::Vector2d q_p = q;
     Eigen::Vector2d tv;
+    Eigen::Vector2d q_L_canidate = q;
+    bool q_H_encounter = false;
+
 
     // First turn is left
     Eigen::Vector2d dv(dir[1], -dir[0]); // get direction vector
@@ -261,18 +334,17 @@ amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, 
     path.waypoints.push_back(q);
 
     // Save closest to goal and indicies
-    int q_H_idx = path.waypoints.size() - 1; // - 1 off by one?
-    float q_L_dist = (problem.q_goal - q_H).norm(); // Initialize as hit point
-    int q_L_idx = path.waypoints.size() - 1; // - 1 off by one?
+    int q_H_idx = path.waypoints.size() - 1; 
+    int q_L_idx = path.waypoints.size() - 1; 
 
-    // std::cout << q_L_idx << " \n";
 
     float dist;
     std::vector<Eigen::Vector2d> wpts;
 
     // Go along the boundary 
-    for (size_t i = 1; i < 2000; i++)
-    {
+    int steps = 0;
+    // for (size_t i = 1; i < 5000; i++)
+    while (true){
         // Get previous direction vector 
         Eigen::Vector2d tv = (q - q_p) / (q - q_p).norm();
         q_p = q;
@@ -280,20 +352,17 @@ amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, 
         // Find the next point on the boundary
         q = find_a_boundary(problem, idx, q, tv, dx, e_o);
 
-        // Get distance to goal and index and see if closer 
-        dist = (problem.q_goal - q).norm();
-        if (dist < q_L_dist)
-        {
-            q_L_dist = dist; 
-            q_L_idx = path.waypoints.size() + 1;
+        if (q == q_p) {
+            std::cout << "Error!";
+            return path;
         }
         
-
         // Determine if it is close-ish to the hit point 
         if ((q - q_H).norm() < 2*dx)
         {
             // Return to hit point
             path.waypoints.push_back(q_H);
+            q_H_encounter = true;
 
             // Refollow the path to q_L in reverse order 
             for (size_t j = path.waypoints.size()-1; j >= q_L_idx; j--)
@@ -301,10 +370,27 @@ amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, 
                 path.waypoints.push_back(path.waypoints[j]);
             }
 
-            break;
+            return path;
+
         } else {
             path.waypoints.push_back(q);
         }
+
+
+        // Determine canidate 
+        if (pointSegmentDistance(problem.q_init, problem.q_goal, q) <= 2*dx && (problem.q_goal - q).norm() < (problem.q_goal - q_L_canidate).norm()) {
+            q_L_canidate = q;
+            q_L_idx = path.waypoints.size();
+            return path;
+        }
+
+
+        steps = steps + 1;
+        if (steps > 50000) { // 10000 // 50000
+            std::cout << "ran out of steps";
+            return path;
+        }
+
         
     }
 
@@ -316,7 +402,7 @@ amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, 
 
 
 // Move to the goal 
-m2g Bug1::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d q_start, float dx, float r_g) {
+m2g Bug2::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d q_start, float dx, float r_g) {
     // Det start and goal values 
     Eigen::Vector2d q_init = q_start;
     Eigen::Vector2d q_goal = problem.q_goal;
@@ -352,7 +438,7 @@ m2g Bug1::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d
             path.waypoints.push_back(wpt);
         } else {
             // Get close to the boundary without entering
-            Eigen::Vector2d b_wpt = get_to_boundary(problem, wpt_info.obs, wpt, dir, dx, 0.01);
+            Eigen::Vector2d b_wpt = get_to_boundary(problem, wpt_info.obs, wpt, dir, dx, 0.007); // 0.01
             path.waypoints.push_back(b_wpt);
             break;
         }
@@ -365,6 +451,7 @@ m2g Bug1::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d
         }
 
     }
+
 
     // If really close to the goal, go to the goal
     if ((path.waypoints.back() - q_goal).norm() <= r_g) {
@@ -381,16 +468,16 @@ m2g Bug1::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d
 
 
 // Implement your methods in the `.cpp` file, for example:
-amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
+amp::Path2D Bug2::plan(const amp::Problem2D& problem) {
 
     // Your algorithm solves the problem and generates a path.
     amp::Path2D path;
 
     // Parameters 
-    float dx = 0.05;
+    float dx = 0.005;
     float dx_b = 0.005; // 0.005
-    float r_g = 0.2;
-    float e_o = 0.01;
+    float r_g = 0.01;
+    float e_o = 0.007; // 0.007
 
     // Leave point 
     Eigen::Vector2d q_L = problem.q_init;
@@ -401,7 +488,7 @@ amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
     std::vector<std::vector<int>> adj_list = connected_obstacles(problem, 0.01);
 
     int safety = 0;
-    while (safety < 10) {
+    while (true) {  
     
         // Move towards the goal until stopped by an obstacle
         m2g m2g_obj = move_to_goal(problem, path, q_L, dx, r_g);
@@ -410,8 +497,7 @@ amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
         // set a hit point 
         if (path.waypoints.back() == problem.q_goal)
         {
-            std::cout << "Done!";
-            //break;
+            break;
         } else {
             // set a hit point 
             Eigen::Vector2d q_H = path.waypoints.back();
@@ -423,6 +509,10 @@ amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
 
 
         safety = safety + 1;
+        if (safety > 100){
+            break;
+        }
+
     }
 
     return path;

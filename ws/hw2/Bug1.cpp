@@ -8,7 +8,8 @@ Resources:
 - https://libeigen.gitlab.io/eigen/docs-nightly/group__QuickRefPage.html
 - https://en.wikipedia.org/wiki/Line_(geometry)#Linear_equation
 - ChatGPT for the point in polygon implementation
-- Brin "Tea Time Numerical Analysis" 
+- ChatGPT for debugging assistance 
+- Brin "Tea Time Numerical Analysis"
 */
 
 // Includes
@@ -154,6 +155,71 @@ std::vector<std::vector<int>> Bug1::connected_obstacles(amp::Problem2D problem, 
 }
 
 
+Eigen::Vector2d find_a_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d q, Eigen::Vector2d dir, float dx, float e_o) {
+
+    // Defining opt variables 
+    float pi = 3.14;
+    float theta = 0.0; //pi/2; 
+    float theta_prev = 0.0;
+    float dtheta = -0.005; // -0.005
+    int N = ceil(abs((4*pi/2) / dtheta));// ceil(abs((3*pi/2) / dtheta));
+    Eigen::Matrix<double, 2, 2> R, R_safe; R << cos(theta), -sin(theta), sin(theta), cos(theta);
+    Eigen::Vector2d t_dir, t_dir_safe, q_b0, q_b1, n_obs;
+    bool flag = false;
+
+    // Rotate until within e_o of boundary 
+    for (size_t i = 0; i < N; i++)
+    {
+        // Get the vector
+        R << cos(theta), -sin(theta), sin(theta), cos(theta);
+        t_dir = R * dir;
+
+        // Reset flag value 
+        flag = false;
+        idx = 0;
+
+        // See if it runs into any obstacles 
+        for (size_t j = 0; j < problem.obstacles.size(); j++)
+        {
+            flag = pip(problem.obstacles[j].verticesCCW(), q + dx*t_dir + e_o*t_dir);
+            if (flag) {
+                idx = j;
+                break;
+            }
+        }
+
+        if (flag)
+        {
+            // Take the previous safe angle
+            theta_prev = theta_prev - 0.005;
+            R_safe << cos(theta_prev), -sin(theta_prev), sin(theta_prev), cos(theta_prev);
+            t_dir_safe = R_safe * dir;
+
+            // Get the direction normal to the obstacle 
+            n_obs = {-t_dir_safe[1], t_dir_safe[0]};
+
+            // If it is not actually safe due to numerical error, reduce step until it is!
+            if (pip(problem.obstacles[idx].verticesCCW(), q + dx*t_dir_safe + n_obs * e_o)) {
+                while (pip(problem.obstacles[idx].verticesCCW(), q + dx*t_dir_safe + n_obs * e_o)) {
+                    dx = dx - 0.0001;
+                }
+            }
+            dx = dx - 0.0001;
+
+            // Return the now definitey safe point
+            return q + dx*t_dir_safe + n_obs * e_o;
+        } else {
+            // Save as a safe theta value
+            theta_prev = theta;
+            theta = theta + dtheta;
+        }
+        
+    }
+
+    return q;
+    
+}
+
 
 
 /* 
@@ -163,11 +229,21 @@ Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Ve
     // Variables
     Eigen::Vector2d x = wpt;
 
-    // Determine if the point is inside the polygon or not
-    bool inside = pip(problem.obstacles[idx].verticesCCW(), x);   
-    //std::cout << inside; 
+    // Determine if the point is inside the polygon or not 
+    bool flag = false;
+    int obs_idx = 0;
 
-    if (inside)
+    // See if it is in into any obstacles 
+    for (size_t j = 0; j < problem.obstacles.size(); j++)
+    {
+        flag = pip(problem.obstacles[j].verticesCCW(), x);
+        if (flag) {
+            obs_idx = j;
+            break;
+        }
+    }
+
+    if (flag)
     {
 
         Eigen::Vector2d t_dir = dir; // dir
@@ -183,7 +259,7 @@ Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Ve
         {
             // Set the bisection point
             m = (dom[1] + dom[0])/2;
-            bool M = pip(problem.obstacles[idx].verticesCCW(), x + m*t_dir);
+            bool M = pip(problem.obstacles[obs_idx].verticesCCW(), x + m*t_dir);
 
             if (M)
             {
@@ -198,64 +274,14 @@ Eigen::Vector2d Bug1::get_to_boundary(amp::Problem2D problem, int idx, Eigen::Ve
         // Return the optimized distance; 
         return x + m*t_dir - e_o*dir; 
 
-    } 
-    
-}
-
-
-Eigen::Vector2d find_a_boundary(amp::Problem2D problem, int idx, Eigen::Vector2d q, Eigen::Vector2d dir, float dx, float e_o) {
-
-    // Defining opt variables 
-    float pi = 3.14;
-    float theta = 0.0; //pi/2; 
-    float theta_prev = 0.0;
-    float dtheta = -0.001;
-    int N = ceil(abs((4*pi/2) / dtheta));// ceil(abs((3*pi/2) / dtheta));
-    Eigen::Matrix<double, 2, 2> R, R_safe; R << cos(theta), -sin(theta), sin(theta), cos(theta);
-    Eigen::Vector2d t_dir, t_dir_safe, q_b0, q_b1, n_obs;
-    bool flag = false;
-
-    // Rotate until within e_o of boundary 
-    for (size_t i = 0; i < N; i++)
-    {
-        // Get the vector
-        R << cos(theta), -sin(theta), sin(theta), cos(theta);
-        t_dir = R * dir;
-
-        // Reset flag value 
-        flag = false;
-
-        // See if it runs into any obstacles 
-        for (size_t j = 0; j < problem.obstacles.size(); j++)
-        {
-            flag = pip(problem.obstacles[j].verticesCCW(), q + dx*t_dir + e_o*t_dir);
-            if (flag) {
-                break;
-            }
-        }
-
-        if (flag)
-        {
-            // Take the previous safe angle
-            theta_prev = theta_prev - 0.001;
-            R_safe << cos(theta_prev), -sin(theta_prev), sin(theta_prev), cos(theta_prev);
-            t_dir_safe = R_safe * dir;
-
-            // Get the direction normal to the obstacle 
-            n_obs = {-t_dir_safe[1], t_dir_safe[0]};
-
-            return q + dx*t_dir_safe + n_obs * e_o;
-        } else {
-            // Save as a safe theta value
-            theta_prev = theta;
-            theta = theta + dtheta;
-        }
-        
+    } else {
+        return find_a_boundary(problem, obs_idx, x, dir, dx, e_o);
     }
 
-    return q;
-    
 }
+
+
+
 
 
 /*
@@ -329,7 +355,7 @@ amp::Path2D Bug1::move_along_boundary(amp::Path2D path, amp::Problem2D problem, 
     }
 
     steps = steps + 1;
-    if (steps > 10000) {
+    if (steps > 50000) { // 10000
         return path;
     }
 
@@ -376,7 +402,7 @@ m2g Bug1::move_to_goal(amp::Problem2D problem, amp::Path2D path, Eigen::Vector2d
             path.waypoints.push_back(wpt);
         } else {
             // Get close to the boundary without entering
-            Eigen::Vector2d b_wpt = get_to_boundary(problem, wpt_info.obs, wpt, dir, dx, 0.01);
+            Eigen::Vector2d b_wpt = get_to_boundary(problem, wpt_info.obs, wpt, dir, dx, 0.007); // 0.01
             path.waypoints.push_back(b_wpt);
             break;
         }
@@ -414,7 +440,7 @@ amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
     float dx = 0.005;
     float dx_b = 0.005; // 0.005
     float r_g = 0.01;
-    float e_o = 0.007;
+    float e_o = 0.007; // 0.007
 
     // Leave point 
     Eigen::Vector2d q_L = problem.q_init;
@@ -434,7 +460,6 @@ amp::Path2D Bug1::plan(const amp::Problem2D& problem) {
         // set a hit point 
         if (path.waypoints.back() == problem.q_goal)
         {
-            std::cout << "Done!";
             break;
         } else {
             // set a hit point 

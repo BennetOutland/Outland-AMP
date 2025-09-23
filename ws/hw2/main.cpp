@@ -5,8 +5,8 @@
 #include "hw/HW2.h"
 
 // Include any custom headers you created in your workspace
-// #include "MyBugAlgorithm.h"
-#include "Bug1.h"
+//#include "Bug1.h"
+#include "Bug2.h"
 
 using namespace amp;
 
@@ -17,13 +17,13 @@ int main(int argc, char** argv) {
     /*    Randomly generate the problem     */ 
 
     // Use WO1 from Exercise 2
-    //Problem2D problem = HW2::getWorkspace1();
+    Problem2D problem = HW2::getWorkspace1();
 
     // Use WO1 from Exercise 2
     /*
     Problem2D problem = HW2::getWorkspace2();
     */
-   Problem2D problem = HW2::getWorkspace2();
+    //Problem2D problem = HW2::getWorkspace2();
 
     // Make a random environment spec, edit properties about it such as the number of obstacles
     /*
@@ -38,8 +38,9 @@ int main(int argc, char** argv) {
     */
 
     // Declare your algorithm object 
-    // MyBugAlgorithm algo;
-    Bug1 algo;
+    //Bug2 algo;
+    Bug2 algo; 
+    //MyBugAlgorithm algo;
     
     {
         // Call your algorithm on the problem
@@ -52,27 +53,29 @@ int main(int argc, char** argv) {
 
         // Visualize the path and environment
         Visualizer::makeFigure(problem, path);
-    }
-
-    // Let's get crazy and generate a random environment and test your algorithm
-    {
-        amp::Path2D path; // Make empty path, problem, and collision points, as they will be created by generateAndCheck()
-        amp::Problem2D random_prob; 
-        std::vector<Eigen::Vector2d> collision_points;
-        bool random_trial_success = HW2::generateAndCheck(algo, path, random_prob, collision_points);
-        LOG("Found valid solution in random environment: " << (random_trial_success ? "Yes!" : "No :("));
 
         LOG("path length: " << path.length());
-
-        // Visualize the path environment, and any collision points with obstacles
-        Visualizer::makeFigure(random_prob, path, collision_points);
     }
 
-    Visualizer::saveFigures(true, "hw2_figs");
+    // // Let's get crazy and generate a random environment and test your algorithm
+    // {
+    //     amp::Path2D path; // Make empty path, problem, and collision points, as they will be created by generateAndCheck()
+    //     amp::Problem2D random_prob; 
+    //     std::vector<Eigen::Vector2d> collision_points;
+    //     bool random_trial_success = HW2::generateAndCheck(algo, path, random_prob, collision_points);
+    //     LOG("Found valid solution in random environment: " << (random_trial_success ? "Yes!" : "No :("));
+
+    //     LOG("path length: " << path.length());
+
+    //     // Visualize the path environment, and any collision points with obstacles
+    //     Visualizer::makeFigure(random_prob, path, collision_points);
+    // }
+
+    // Visualizer::saveFigures(true, "hw2_figs");
 
 
     // int total = 0;
-    // for (size_t i = 0; i < 10; i++)
+    // for (size_t i = 0; i < 100; i++)
     // {
     //     amp::Path2D path; // Make empty path, problem, and collision points, as they will be created by generateAndCheck()
     //     amp::Problem2D random_prob; 
@@ -83,23 +86,23 @@ int main(int argc, char** argv) {
     //         total = total + 1;
     //     }
 
-    //     if (!random_trial_success) {
-    //         Visualizer::makeFigure(random_prob, path, collision_points);
-    //         Visualizer::saveFigures(true, "hw2_figs");
-    //     }
+    //     // if (!random_trial_success) {
+    //     //     Visualizer::makeFigure(random_prob, path, collision_points);
+    //     //     Visualizer::saveFigures(true, "hw2_figs");
+    //     // }
     // }
 
-    // std::cout << total << "/" << 10;
+    // std::cout << total << "/" << 100;
     
 
 
-    // HW2::grade(algo, "nonhuman.biologic@myspace.edu", argc, argv);
+    // HW2::grade(algo, "bennet.outland@colorado.edu", argc, argv);
     
     /* If you want to reconstruct your bug algorithm object every trial (to reset member variables from scratch or initialize), use this method instead*/
     //HW2::grade<MyBugAlgorithm>("nonhuman.biologic@myspace.edu", argc, argv, constructor_parameter_1, constructor_parameter_2, etc...);
     
     // This will reconstruct using the default constructor every trial
-    //HW2::grade<MyBugAlgorithm>("nonhuman.biologic@myspace.edu", argc, argv);
+    //HW2::grade<Bug1>("nonhuman.biologic@myspace.edu", argc, argv);
 
     return 0;
 }
