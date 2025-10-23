@@ -1,3 +1,13 @@
+/*
+Author: Bennet Outland
+Affiliation: University of Colorado Boulder
+Control: None
+License: NA
+
+Resources:
+- Lecture Slides
+*/
+
 #pragma once
 
 // This includes all of the necessary header files in the toolbox
@@ -6,30 +16,41 @@
 // Include the correct homework header
 #include "hw/HW5.h"
 
-class MyGDAlgorithm : public amp::GDAlgorithm {
-	public:
-		// Consider defining a class constructor to easily tune parameters, for example: 
-		MyGDAlgorithm(double d_star, double zetta, double Q_star, double eta) :
-			d_star(d_star),
-			zetta(zetta),
-			Q_star(Q_star),
-			eta(eta) {}
 
-		// Override this method to solve a given problem.
-		virtual amp::Path2D plan(const amp::Problem2D& problem) override;
-	private:
-		double d_star, zetta, Q_star, eta;
-		// Add additional member variables here...
-};
 
 class MyPotentialFunction : public amp::PotentialFunction2D {
     public:
-		// Returns the potential function value (height) for a given 2D point. 
-        virtual double operator()(const Eigen::Vector2d& q) const override {
-            return q[0] * q[0] + q[1] * q[1];
-        }
+		// Initialize the field with the passed in params
+		MyPotentialFunction(double d_star, double zeta, double Q_star, double eta);
 
-		virtual Eigen::Vector2d getGradient(const Eigen::Vector2d& q) const override {
-            return Eigen::Vector2d(q[0] * q[0],  q[1] * q[1]);
-        }
+		// Adds the boundary conditions for the trajectory
+		void add_boundary_values(amp::Problem2D problem);
+
+		// Returns the potential function value (height) for a given 2D point. 
+		double operator()(const Eigen::Vector2d& q) const;
+
+		// Returns the gradient at a point
+		Eigen::Vector2d getGradient(const Eigen::Vector2d& q) const;
+
+		double d_star, zeta, Q_star, eta;
+		Eigen::Vector2d q_init, q_goal;
+		amp::Problem2D problem;
 };
+
+
+
+
+
+class MyGDAlgorithm : public amp::GDAlgorithm {
+	public:
+		// Constructor
+		MyGDAlgorithm(double d_star, double zeta, double Q_star, double eta);
+
+		// Override this method to solve a given problem.
+		virtual amp::Path2D plan(const amp::Problem2D& problem) override;
+		// private:
+		double d_star, zeta, Q_star, eta, alpha;
+		MyPotentialFunction pot_func;
+		// Add additional member variables here...
+};
+

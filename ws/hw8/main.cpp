@@ -18,6 +18,15 @@ void timer_example() {
     std::cout << "Total time since last run: " << Profiler::getTotalProfile("timer") << std::endl;
 }
 
+/*
+Breaking it down:
+- Make RRT n-dimensional
+- Stack and solve for the centralized planner
+- Add robot-robot collison constraints
+- Implement the priority method
+- Benchmark
+*/
+
 int main(int argc, char** argv) {
     // Initializing workspace 1 with 3 agents
     amp::RNG::seed(amp::RNG::randiUnbounded());
@@ -26,19 +35,23 @@ int main(int argc, char** argv) {
     std::vector<std::vector<Eigen::Vector2d>> collision_states;
 
     // Solve using a centralized approach
-    MyCentralPlanner central_planner;
-    path = central_planner.plan(problem);
-    bool isValid = HW8::check(path, problem, collision_states);
-    Visualizer::makeFigure(problem, path, collision_states);
+    // MyCentralPlanner central_planner;
+    // //path = central_planner.plan(problem);
+    // HW8::generateAndCheck(central_planner, path, problem, collision_states);
+    // //bool isValid = HW8::check(path, problem, collision_states);
+    // Visualizer::makeFigure(problem, path, collision_states);
 
     // Solve using a decentralized approach
-    MyDecentralPlanner decentral_planner;
-    collision_states = {{}};
-    HW8::generateAndCheck(decentral_planner, path, problem, collision_states);
-    Visualizer::makeFigure(problem, path, collision_states);
+    //MyDecentralPlanner decentral_planner;
+    // collision_states = {{}};
+    // path = decentral_planner.plan(problem);
+    // bool isValid = HW8::check(path, problem, collision_states);
+    // //HW8::generateAndCheck(decentral_planner, path, problem, collision_states);
+    // Visualizer::makeFigure(problem, path, collision_states);
 
     // Visualize and grade methods
-    Visualizer::showFigures();
+    //Visualizer::saveFigures();
+
     HW8::grade<MyCentralPlanner, MyDecentralPlanner>("firstName.lastName@colorado.edu", argc, argv, std::make_tuple(), std::make_tuple());
     return 0;
 }

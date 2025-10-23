@@ -46,7 +46,7 @@ MyAStarAlgo::GraphSearchResult MyAStarAlgo::search(const amp::ShortestPathProble
     // 
     int iter = 1;
     while (!open_set.empty()) {
-        std::cout << iter << std::endl;
+        //std::cout << iter << std::endl;
         NodeCost current = open_set.top();
         open_set.pop();
 
@@ -63,7 +63,7 @@ MyAStarAlgo::GraphSearchResult MyAStarAlgo::search(const amp::ShortestPathProble
             }
             result.node_path.insert(result.node_path.begin(), problem.init_node);
 
-            result.print();
+            //result.print();
             return result;
         }
 
@@ -88,6 +88,6 @@ MyAStarAlgo::GraphSearchResult MyAStarAlgo::search(const amp::ShortestPathProble
         iter = iter + 1;
     }
 
-    result.print();
+    //result.print();
     return result;
 }

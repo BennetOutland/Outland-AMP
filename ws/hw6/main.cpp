@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     Problem2D manip_problem = HW6::getHW4Problem2();
     
     // Construct point-agent and manipulator cspace instances.
-    std::size_t n_cells = 5;
+    std::size_t n_cells = 90; // 60, 99
     std::shared_ptr<MyPointAgentCSConstructor> point_agent_ctor = std::make_shared<MyPointAgentCSConstructor>(n_cells);
     std::shared_ptr<MyManipulatorCSConstructor> manipulator_ctor = std::make_shared<MyManipulatorCSConstructor>(n_cells);
     std::shared_ptr<WaveFrontAlgorithm> wf_algo = std::make_shared<MyWaveFrontAlgorithm>();
@@ -28,23 +28,30 @@ int main(int argc, char** argv) {
     PointWaveFrontAlgorithm point_algo(wf_algo, point_agent_ctor);
     ManipulatorWaveFrontAlgorithm manip_algo(wf_algo, manipulator_ctor);
 
-    // Return a path for the point-agent and manipulator using c-space planning.
-    Path2D path = point_algo.plan(point_problem);
-    Visualizer::makeFigure(point_problem, path); // Visualize path in workspace
-    Visualizer::makeFigure(*point_algo.getCSpace(), path); // Visualize path in cspace
+    // // Return a path for the point-agent and manipulator using c-space planning.
+    // Path2D path = point_algo.plan(point_problem);
+    // Visualizer::makeFigure(point_problem, path); // Visualize path in workspace
+    // Visualizer::makeFigure(*point_algo.getCSpace(), path); // Visualize path in cspace
 
     ManipulatorTrajectory2Link trajectory = manip_algo.plan(manipulator, manip_problem);
     Visualizer::makeFigure(manip_problem, manipulator, trajectory);
     Visualizer::makeFigure(*manip_algo.getCSpace(), trajectory);
+    HW6::checkLinkManipulatorPlan(trajectory, manipulator, manip_problem);
 
     // For Exercise 3, you will need to implement the A* algorithm.
-    ShortestPathProblem problem = HW6::getEx3SPP();
-    LookupSearchHeuristic heuristic = HW6::getEx3Heuristic();
-    MyAStarAlgo algo;
-    MyAStarAlgo::GraphSearchResult result = algo.search(problem, heuristic);
+    // ShortestPathProblem problem = HW6::getEx3SPP();
+    // LookupSearchHeuristic heuristic = HW6::getEx3Heuristic();
+    // MyAStarAlgo algo;
+    // MyAStarAlgo::GraphSearchResult result = algo.search(problem, heuristic);
+    //problem.graph->print();
+
+    //LOG("path length: " << path.length());
+
 
     Visualizer::saveFigures();
 
-    amp::HW6::grade<PointWaveFrontAlgorithm, ManipulatorWaveFrontAlgorithm, MyAStarAlgo>("yusif.razzaq@colorado.edu", argc, argv, std::make_tuple(wf_algo, point_agent_ctor), std::make_tuple(wf_algo, manipulator_ctor), std::make_tuple());
+
+
+    //amp::HW6::grade<PointWaveFrontAlgorithm, ManipulatorWaveFrontAlgorithm, MyAStarAlgo>("bennet.outland@colorado.edu", argc, argv, std::make_tuple(wf_algo, point_agent_ctor), std::make_tuple(wf_algo, manipulator_ctor), std::make_tuple());
     return 0;
 }
